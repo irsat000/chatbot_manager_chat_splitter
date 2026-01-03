@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Readable Chat Splitter</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+    }
+
+    input,
+    button {
+      margin: 10px 0;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Singular Chat Splitter</h2>
+  <input type="file" id="fileInput" accept=".html" />
+  <br />
+  <label>Number of parts:</label>
+  <input type="number" id="parts" min="1" value="2" />
+  <br />
+  <button id="run">Split & Download (ZIP)</button>
+
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script>
+    document.getElementById('run').onclick = async () => {
+      const file = document.getElementById('fileInput').files[0];
+      const parts = parseInt(document.getElementById('parts').value, 10);
+      if (!file || parts < 1) return;
+
+      const text = await file.text();
+
+      const match = text.match(/let\s+historyData\s*=\s*`([\s\S]*?)`;/);
+      if (!match) return;
+
+      const decoded = JSON.parse(decodeURIComponent(match[1]));
+      const content = decoded.history[0].content;
+
+      const chunkSize = Math.ceil(content.length / parts);
+      const zip = new JSZip();
+
+      for (let i = 0; i < parts; i++) {
+        const slice = content.slice(i * chunkSize, (i + 1) * chunkSize);
+        if (!slice.length) break;
+
+        const cloned = JSON.parse(JSON.stringify(decoded));
+        cloned.history[0].content = slice;
+
+        const newHistoryData = 'let historyData = `' + encodeURIComponent(JSON.stringify(cloned)) + '`;';
+        const newHtml = text.replace(match[0], newHistoryData);
+
+        zip.file(file.name.replace('.html', '') + `_part_${i + 1}.html`, newHtml);
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'split_files.zip';
+      a.click();
+    };
+  </script>
+</body>
+
+</html>
